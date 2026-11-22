@@ -1,0 +1,73 @@
+Catatan proyek bot Telegram (workspace-only):
+
+pip install python-telegram-bot python-dotenv groq langchain langchain-groq langchain-classic duckduckgo-search python-docx openpyxl python-pptx Pillow
+
+Perubahan cakupan:
+- Bot HANYA boleh bekerja di dalam folder "workspace".
+- Semua akses ke Desktop, Downloads, Documents (folder Windows), Pictures,
+  Videos, drive lain, Games, Start Menu, dan Program Files sudah DIHAPUS.
+- Fitur buka/tutup aplikasi, kontrol jendela, ketik ke Word/Notepad/VS Code,
+  dan buka browser juga DIHAPUS.
+- SEMUA file hasil generate (Word, Excel, PowerPoint, teks, kode, gambar)
+  masuk ke satu folder: workspace/documents.
+  Folder lama images/, presentations/, spreadsheets/ dihapus otomatis;
+  isinya (kalau ada) dipindahkan ke documents saat bot start.
+- AI boleh membuat subfolder di dalam documents lewat tool create_folder,
+  mis. "laporan/2026". File juga boleh ditulis ke subfolder:
+  create_file_tool(filename="laporan/agustus/catatan.txt", ...).
+- Folder "uploads" khusus file/gambar yang dikirim user.
+- File TIDAK dikirim otomatis ke chat. Setelah membuat file, bot hanya
+  melaporkan nama + lokasinya di documents, lalu user bisa minta:
+  "kirim file <nama file>".
+  Alat send_file(filename) hanya dipanggil kalau user eksplisit minta kirim.
+  send_file menerima path relatif documents ('nota.txt'), path lengkap
+  ('laporan/nota.txt' atau 'documents/laporan/nota.txt'), dan 'uploads/...'.
+  Kalau path tidak persis ada, dicari file dengan nama sama di workspace;
+  kalau ada beberapa, bot meminta user menyebut path lengkap.
+- Saat AI menulis/mengisi file, isi file TIDAK diulang di chat. Balasan
+  hanya konfirmasi singkat (nama file + lokasi). Pengaman tambahan:
+  jawaban yang menyertai pembuatan file dipangkas di 600 karakter
+  (MAX_FILE_REPLY_CHARS) agar tidak memakan token/pesan panjang.
+- AI bisa MENGEDIT file yang sudah ada (tidak hanya membuat baru):
+    inspect_excel_spreadsheet -> lihat nama sheet, ukuran, merge, isi sel + alamat
+    edit_excel_spreadsheet   -> ubah sel, set range, append/insert/delete baris
+                                atau kolom, rename/add/delete sheet
+    edit_text_file           -> ganti sebagian teks di .txt/.md/.py/.json/.csv dll.
+    append_text_file         -> tambah teks di akhir file teks
+  File Excel yang diedit tetap menyimpan data & format lain (tidak dibuat ulang).
+  Untuk menimpa seluruh isi file teks, create_file_tool memakai nama yang sama.
+- Perintah kelola file:
+    /ping            -> cek cepat apakah bot menerima pesan & bisa membalas
+    /show_uploads    -> daftar isi uploads + tombol hapus per file
+    /show_documents  -> daftar isi documents + tombol hapus per file/folder
+    /remove_uploads  -> hapus SEMUA isi uploads
+    /remove_documents-> hapus SEMUA isi documents
+  Folder documents/uploads itu sendiri tetap ada.
+- Gambar dianalisis dengan model lokal Qwen2.5-VL lewat Ollama
+  (model: OLLAMA_VISION_MODEL, default qwen25vl:3b-local).
+
+Model chat (/model) -- semua diatur dari .env, bukan dari bot.py:
+- Format baris: CHAT_MODEL_<nomor>=key|provider|nama_model|label|catatan
+- provider: groq (cloud) atau local (Ollama).
+- Contoh:
+    CHAT_MODEL_1=gpt|groq|openai/gpt-oss-120b|GPT-OSS 120B|cloud Groq
+    CHAT_MODEL_2=gpt20|groq|openai/gpt-oss-20b|GPT-OSS 20B|cloud cepat
+    CHAT_MODEL_3=phi4|local|phi4-mini-q4:latest|Phi-4-mini|lokal offline
+- Menambah model lokal lain = tambah satu baris dengan nama dari `ollama list`.
+- CHAT_MODEL_DEFAULT memilih model awal saat bot start.
+- Jika tidak ada baris CHAT_MODEL_<n>, bot memakai GROQ_MODEL,
+  GROQ_MODEL_70B, dan OLLAMA_CHAT_MODEL.
+- /model membaca ulang .env secara otomatis (tanpa restart). Perubahan nama
+  model langsung terlihat saat /model dibuka atau pesan berikutnya dikirim.
+- Tombol /model selalu memakai nama model asli, jadi tidak nyangkut di label
+  lama. Kolom label hanya keterangan tambahan.
+- Ganti model langsung dengan /model <key> atau /model <nama_model>.
+  /model reload memaksa daftar model dibaca ulang dari .env.
+- Pilihan per chat disimpan di chat_models.json (tetap ada setelah restart).
+  Kalau model yang tersimpan sudah dihapus dari .env, bot otomatis memakai
+  model default.
+- Jika model Groq gagal (limit/offline), bot otomatis menjawab dengan
+  model lokal pertama yang terdaftar.
+- Model lokal memakai protokol JSON action, bukan tool calling native:
+    {"action":"nama_alat","args":{...}} / {"action":"final","answer":"..."}
+  dengan maksimal 8 langkah per pesan.
